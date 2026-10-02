@@ -6,6 +6,10 @@
     <title>Telegram Cyber Dash - Infinite Runner</title>
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Ad SDK Integration -->
+    <script src='//libtl.com/sdk.js' data-zone='11937368' data-sdk='show_11937368'></script>
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -208,10 +212,10 @@
                 <div class="flex justify-between items-center mb-3">
                     <div>
                         <h3 class="font-black text-white text-sm">Need More Telegram Stars?</h3>
-                        <p class="text-xs text-slate-400">Instant boost for upgrades</p>
+                        <p class="text-xs text-slate-400">Watch short ad for free stars</p>
                     </div>
-                    <button onclick="simulateStarPurchase(100)" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95">
-                        ⭐ Buy 100 Stars
+                    <button onclick="watchAdForFreeStars()" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95">
+                        🎬 Watch Ad (+25 ⭐)
                     </button>
                 </div>
             </div>
@@ -243,46 +247,46 @@
                 <div class="flex items-center gap-3">
                     <span class="font-black text-amber-400 w-6">#1</span>
                     <div class="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs">TG</div>
-                    <div>
-                        <div class="font-bold text-sm text-white">CyberPawn</div>
-                        <div class="text-[10px] text-slate-400">PRO RUNNER</div>
+        <!-- Game Over Modal -->
+        <div id="gameover-modal" class="hidden absolute inset-0 z-40 flex flex-col items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
+            <div class="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center shadow-2xl relative">
+                <div class="w-14 h-14 bg-red-500/20 border border-red-500/40 rounded-2xl flex items-center justify-center mx-auto mb-3 text-red-400 text-2xl">
+                    <i class="fa-solid fa-skull"></i>
+                </div>
+                <h2 class="text-2xl font-black text-white mb-1">RUN CRASHED</h2>
+                <p class="text-xs text-slate-400 mb-4">Obstacle collision detected</p>
+
+                <!-- Stats summary -->
+                <div class="bg-slate-950/60 rounded-2xl p-3 border border-slate-800/80 mb-4 space-y-2">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-400">Distance</span>
+                        <span id="go-distance" class="font-extrabold text-cyan-400">0 m</span>
+                    </div>
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-400">Stars Picked</span>
+                        <span id="go-stars" class="font-extrabold text-amber-400">⭐ 0</span>
+                    </div>
+                    <div class="h-px bg-slate-800 my-1"></div>
+                    <div class="flex justify-between items-center text-base">
+                        <span class="text-slate-300 font-bold">Total Score</span>
+                        <span id="go-total-score" class="font-black text-emerald-400">0 pts</span>
                     </div>
                 </div>
-                <span class="font-black text-cyan-400 text-sm">14,250 m</span>
-            </div>
-            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <span class="font-black text-slate-300 w-6">#2</span>
-                    <div class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">AL</div>
-                    <div>
-                        <div class="font-bold text-sm text-white">Alex_D</div>
-                        <div class="text-[10px] text-slate-400">STAR COLLECTOR</div>
-                    </div>
+
+                <!-- Revive Button (Integrated with Monetization Ad SDK) -->
+                <div id="revive-container" class="mb-3">
+                    <button id="revive-btn" onclick="watchAdToRevive()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black rounded-xl text-sm shadow-md shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-film"></i> Watch Ad to Revive (1/1)
+                    </button>
                 </div>
-                <span class="font-black text-cyan-400 text-sm">11,890 m</span>
-            </div>
-            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <span class="font-black text-amber-700 w-6">#3</span>
-                    <div class="w-8 h-8 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-xs">ME</div>
-                    <div>
-                        <div class="font-bold text-sm text-white">MemeGod</div>
-                        <div class="text-[10px] text-slate-400">VIP PLAYER</div>
-                    </div>
-                </div>
-                <span class="font-black text-cyan-400 text-sm">9,420 m</span>
-            </div>
-            <!-- Player entry -->
-            <div id="player-lb-entry" class="bg-tg-blue/20 p-3 rounded-xl border border-tg-blue/50 flex items-center justify-between mt-4">
-                <div class="flex items-center gap-3">
-                    <span class="font-black text-sky-300 w-6">YOU</span>
-                    <div id="player-avatar" class="w-8 h-8 rounded-full bg-tg-blue text-white flex items-center justify-center font-bold text-xs">U</div>
-                    <div>
-                        <div id="player-name" class="font-bold text-sm text-white">Telegram User</div>
-                        <div class="text-[10px] text-sky-300">Your Rank</div>
-                    </div>
-                </div>
-                <span id="player-lb-score" class="font-black text-sky-300 text-sm">0 m</span>
+
+                <!-- Restart Button -->
+                <button onclick="restartGameWithAd()" class="w-full py-3.5 bg-tg-blue hover:bg-sky-400 text-slate-950 font-black rounded-xl text-sm transition active:scale-95 flex items-center justify-center gap-2 mb-2">
+                    <i class="fa-solid fa-rotate-right"></i> Play Again
+                </button>
+                <button onclick="showStartScreen()" class="w-full py-2.5 bg-slate-800 text-slate-300 font-semibold rounded-xl text-xs hover:bg-slate-700 transition">
+                    Main Menu
+                </button>
             </div>
         </div>
 
@@ -327,16 +331,70 @@
 
     <script>
         /* ==========================================================================
-           TELEGRAM WEB APP SDK & INITIALIZATION
+           STREAMING_CHUNK: Integrating Real Monetization Ad SDK Functions
            ========================================================================== */
-        const tg = window.Telegram?.WebApp;
-        if (tg) {
-            tg.ready();
-            tg.expand();
-            // Adapt background theme
-            if (tg.colorScheme === 'light') {
-                document.body.classList.add('bg-slate-900');
+
+        // Wrapper function to trigger SDK Ads with promise handling & fallbacks
+        function triggerAdSDK() {
+            return new Promise((resolve) => {
+                if (typeof show_11937368 === 'function') {
+                    show_11937368()
+                        .then(() => resolve(true))
+                        .catch((err) => {
+                            console.warn("Ad closed or failed to load:", err);
+                            resolve(false);
+                        });
+                } else {
+                    console.warn("Ad SDK not loaded yet. Falling back.");
+                    resolve(true); // Graceful fallback
+                }
+            });
+        }
+
+        // Rewarded Ad to Revive Player
+        async function watchAdToRevive() {
+            if (reviveUsed) return;
+
+            triggerHaptic('medium');
+            const adCompleted = await triggerAdSDK();
+
+            if (adCompleted) {
+                reviveUsed = true;
+                document.getElementById('revive-container').classList.add('hidden');
+                document.getElementById('gameover-modal').classList.add('hidden');
+
+                // Revive Player State
+                isRunning = true;
+                isGameOver = false;
+                activePowerups.shield = true;
+                playSound('powerup');
+                requestAnimationFrame(gameLoop);
+            } else {
+                tg?.showAlert?.("Please watch the full ad to revive!");
             }
+        }
+
+        // Rewarded Ad in Shop for Free Stars
+        async function watchAdForFreeStars() {
+            triggerHaptic('light');
+            const adCompleted = await triggerAdSDK();
+
+            if (adCompleted) {
+                state.stars += 25;
+                saveState();
+                playSound('star');
+                renderShopItems();
+                tg?.showAlert?.("🎉 You earned +25 Telegram Stars!");
+            }
+        }
+
+        // Interstitial Ad on Game Restart
+        async function restartGameWithAd() {
+            // Trigger interstitial ad seamlessly before restarting
+            if (Math.random() < 0.6) { // 60% chance to show interstitial between runs
+                await triggerAdSDK();
+            }
+            startGame();
         }
 
         // Native Haptic Feedback Wrapper
