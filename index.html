@@ -85,6 +85,7 @@ canvas{display:block}
         </div>
         <div id="m-ab" class="text-xs font-bold text-center -mt-1"></div>
         <div class="grid grid-cols-3 gap-2 w-full"><div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center"><div class="text-[10px] text-slate-400 uppercase tracking-wider">Récord</div><div id="high-score" class="font-orbitron font-bold text-amber-400 text-sm">0 PTS</div></div><div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center"><div class="text-[10px] text-slate-400 uppercase tracking-wider">Estrellas</div><div id="m-stars" class="font-orbitron font-bold text-amber-300 text-sm">0</div></div><div class="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-center"><div class="text-[10px] text-slate-400 uppercase tracking-wider">Liga</div><div id="m-league" class="font-orbitron font-bold text-cyan-300 text-sm">🥉 Bronce</div></div></div>
+        <button id="daily-btn" onclick="claimDaily()" class="w-full py-2 rounded-xl bg-slate-900/80 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-bold font-orbitron active:scale-95"></button>
         <button id="start-btn" onclick="startGame()" class="shine w-full py-4 bg-gradient-to-r from-cyan-500 via-blue-600 to-fuchsia-600 text-white font-orbitron font-bold text-lg rounded-2xl shadow-lg shadow-cyan-500/30 active:scale-95 transition-all tracking-wider border border-cyan-300/30">▶ INICIAR CARRERA</button>
         <div class="text-[11px] text-slate-500 text-center">Toca izquierda/derecha para moverte · ⚡ para el Dash</div>
       </div>
@@ -92,7 +93,7 @@ canvas{display:block}
       <div id="view-rank" class="hidden space-y-1.5"></div>
     </div>
     <button onclick="showAdForBonus()" class="relative w-full py-3 bg-slate-900/90 border border-amber-500/40 text-amber-400 font-bold text-xs rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md">
-      <span class="text-base">📺</span><span>CONSEGUIR ESTRELLAS GRATIS (+15 ⭐)</span>
+      <span class="text-base">📺</span><span id="ad-lbl">CONSEGUIR ESTRELLAS GRATIS (+15 ⭐)</span>
     </button>
     <div class="relative flex bg-slate-900/90 p-1 rounded-2xl border border-slate-800 mt-2"><button onclick="switchTab('play')" id="tab-play"><span class="text-lg">🎮</span><span>JUGAR</span></button><button onclick="switchTab('shop')" id="tab-shop"><span class="text-lg">🛍️</span><span>TIENDA</span></button><button onclick="switchTab('rank')" id="tab-rank"><span class="text-lg">🏆</span><span>LIGA</span></button></div>
   </div>
@@ -103,6 +104,7 @@ canvas{display:block}
     <h2 class="font-orbitron font-black text-4xl text-red-500 glitch" style="text-shadow:0 0 20px rgba(239,68,68,.8)">HAS MUERTO</h2>
     <div id="d-killer" class="text-slate-400 text-sm mt-1 mb-4"></div>
     <div id="d-stats" class="grid grid-cols-3 gap-2 w-full mb-5"></div>
+    <button id="dbl-btn" onclick="doubleStars()" class="hidden w-full py-3 mb-2 bg-slate-900 border border-amber-500/50 text-amber-400 font-orbitron font-bold text-xs rounded-xl active:scale-95"></button>
     <button id="revive-btn" onclick="reviveWithAd()" class="pulse-btn w-full py-4 mb-3 bg-gradient-to-r from-amber-400 to-orange-600 text-slate-950 font-orbitron font-black text-base rounded-2xl shadow-lg shadow-amber-500/40 active:scale-95">📺 REVIVIR (VER ANUNCIO)</button>
     <div class="flex gap-2 w-full">
       <button onclick="retry()" class="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 font-orbitron font-bold text-xs rounded-xl active:scale-95">🔄 REINTENTAR</button>
@@ -117,6 +119,25 @@ const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); if (tg.setHeaderColor) tg.setHeaderColor('#030712'); }
 const hap = (k, t) => { try { tg?.HapticFeedback?.[k](t); } catch (e) {} };
 const $ = id => document.getElementById(id);
+
+// ===== Servidor (ranking global + compras con Stars): pon aquí la URL de tu servidor =====
+const API = ''; // ej: 'https://tu-servidor.com'  (vacío = modo local sin ranking ni compras)
+const api = (p, b = {}) => fetch(API + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData: tg?.initData || '', ...b }) }).then(r => r.json());
+const PREM = [{ id: 'starter', n: '🎁 Pack Inicial', d: 'Skin Omega + 800 ⭐ (una vez)', x: 75 }, { id: 'pack', n: '⭐ Pack de Estrellas', d: '600 estrellas', x: 50 }, { id: 'vip', n: '👑 VIP 30 días', d: '×2 estrellas y escudo inicial', x: 250 }];
+let SRV = { vipUntil: 0 };
+const isVip = () => SRV.vipUntil > Date.now();
+async function syncMe() {
+  if (!API) return;
+  try {
+    const m = await api('/me'); SRV.vipUntil = m.vipUntil || 0; if (m.credit) S.stars += m.credit; (m.skins || []).forEach(k => { S.own[k] = 1; });
+    save(); if (!$('view-shop').classList.contains('hidden')) renderShop();
+  } catch (e) {}
+}
+async function buyPremium(id) {
+  if (!API || !tg?.openInvoice) return alert('Las compras funcionan dentro de Telegram con el servidor activo.');
+  try { const r = await api('/invoice', { product: id }); tg.openInvoice(r.link, st => { if (st === 'paid') { hap('notificationOccurred', 'success'); setTimeout(syncMe, 1500); } }); } catch (e) { alert('No se pudo crear la factura.'); }
+}
+function submitScore() { if (API) api('/score', { score, level: R.level, dur: Math.round(R.t / 60) }).catch(() => {}); }
 
 // ===== Sonido =====
 let AC = null;
@@ -145,9 +166,52 @@ const SFX = {
   freeze: () => { tone(1500, .6, 'sine', .1, -1100); tone(900, .6, 'triangle', .08, -600, .05); }, fire: () => { noise(.6, .3, 1800); tone(200, .5, 'sawtooth', .12, 300); },
   beam: () => { noise(1.4, .2, 1500); tone(120, 1.5, 'sawtooth', .13, 40); }, heal: () => [392, 523, 659, 784].forEach((f, i) => tone(f, .25, 'sine', .14, 0, i * .09)),
   revive: () => [262, 330, 392, 523, 659].forEach((f, i) => tone(f, .18, 'triangle', .12, 0, i * .06)),
+  curse: () => { tone(220, .6, 'sawtooth', .15, -150); tone(233, .6, 'sawtooth', .12, -150, .02); },
   death: () => { tone(420, 1.4, 'sawtooth', .22, -360); noise(1, .4, 500); }
 };
 const sfx = n => { try { SFX[n] && SFX[n](); } catch (e) {} };
+// ===== Música dinámica (sintetizada: menú tranquilo; en juego suma capas según nivel, jefe, peligro y golpes) =====
+const mus = { mode: 'menu', step: 0, next: 0, bpm: 90, hit: 0 };
+const CH = [[55, [0, 3, 7, 12]], [43.65, [0, 4, 7, 12]], [65.41, [0, 4, 7, 12]], [49, [0, 4, 7, 12]]];
+function musBus() {
+  if (mus.bus || !AC) return;
+  mus.bus = AC.createGain(); mus.bus.gain.value = .4; mus.lp = AC.createBiquadFilter(); mus.lp.type = 'lowpass'; mus.lp.frequency.value = 14000;
+  mus.bus.connect(mus.lp); mus.lp.connect(AC.destination);
+  mus.nb = AC.createBuffer(1, AC.sampleRate * .25, AC.sampleRate); const x = mus.nb.getChannelData(0); for (let i = 0; i < x.length; i++) x[i] = Math.random() * 2 - 1;
+}
+function mn(f, t, d, type, v) { const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(g); g.connect(mus.bus); o.start(t); o.stop(t + d + .02); }
+function mp(t, k) {
+  const g = AC.createGain();
+  if (k === 'k') { const o = AC.createOscillator(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(40, t + .12); g.gain.setValueAtTime(.7, t); g.gain.exponentialRampToValueAtTime(.001, t + .16); o.connect(g); g.connect(mus.bus); o.start(t); o.stop(t + .2); }
+  else { const s = AC.createBufferSource(), f = AC.createBiquadFilter(); s.buffer = mus.nb; f.type = 'highpass'; f.frequency.value = k === 'h' ? 7000 : 1500; g.gain.setValueAtTime(k === 'h' ? .08 : .3, t); g.gain.exponentialRampToValueAtTime(.001, t + (k === 'h' ? .04 : .15)); s.connect(f); f.connect(g); g.connect(mus.bus); s.start(t); s.stop(t + .2); }
+}
+function mstep(t) {
+  const s = mus.step % 16, [rt, ms] = CH[(mus.step >> 4) % 4], nt = (i, o) => rt * o * Math.pow(2, ms[i % 4] / 12), pk = state === 'pick';
+  if (mus.mode === 'menu') {
+    mus.bpm = 84; mus.lp.frequency.setTargetAtTime(9000, t, .1); mus.bus.gain.setTargetAtTime(.4, t, .1);
+    if (s === 0) { mn(nt(0, 2), t, 2.6, 'triangle', .1); mn(nt(2, 2), t, 2.6, 'triangle', .07); mn(nt(1, 4), t + 1.3, 1.3, 'sine', .05); }
+    if (s % 2 === 0) mn(nt(s >> 1, 4), t, .35, 'sine', .07 + (s % 8 === 0 ? .03 : 0));
+    if (s % 4 === 2) mp(t, 'h'); if (s === 0 || s === 10) mp(t, 'k'); return;
+  }
+  const L = R.level || 1, B = R.boss, boss = !!B, ph2 = boss && B.hp < B.max / 2, danger = !!R.u && R.lives <= 1 && !R.shield, dip = mus.hit > 0;
+  if (dip) mus.hit--;
+  mus.bpm = 114 + Math.min(L, 10) * 2 + (boss ? 14 : 0) + (danger ? 6 : 0);
+  mus.lp.frequency.setTargetAtTime(dip ? 450 : pk ? 1400 : 14000, t, .06); mus.bus.gain.setTargetAtTime(pk ? .2 : .4, t, .1);
+  if (s % 2 === 0) mn(rt * (s % 4 === 2 ? 2 : 1), t, .2, 'sawtooth', .16);
+  if (s % 2 === 0 || boss) mp(t, 'h');
+  if ((L >= 2 || boss) && s % 4 === 0 && !dip) mp(t, 'k');
+  if ((L >= 5 || boss) && (s === 4 || s === 12) && !dip) mp(t, 's');
+  if ((L >= 3 || boss) && !dip) mn(nt(s, 4), t, .12, 'square', .05);
+  if (ph2 || danger) { if (s % 2 === 0) mn(nt(s >> 1, 8), t, .2, 'sawtooth', .05); if (danger && s % 8 === 0) mp(t, 'k'); }
+}
+function sched() {
+  if (!AC || AC.state !== 'running' || S.mute || mus.mode === 'off') { if (AC) mus.next = AC.currentTime + .1; return; }
+  musBus(); if (!mus.bus) return;
+  while (mus.next < AC.currentTime + .15) { mstep(mus.next); mus.step++; mus.next += 60 / mus.bpm / 4; }
+}
+function setMusic(m) { mus.mode = m; mus.step = 0; if (AC) mus.next = AC.currentTime + .05; if (m === 'off' && mus.lp) mus.lp.frequency.setTargetAtTime(180, AC.currentTime, .25); }
+setInterval(sched, 25);
+document.addEventListener('visibilitychange', () => { if (AC) document.hidden ? AC.suspend() : AC.resume(); });
 function toggleMute() { S.mute = !S.mute; save(); $('mute-btn').innerText = S.mute ? '🔇' : '🔊'; sfx('click'); }
 addEventListener('pointerdown', () => ac());
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('button')) sfx('click'); });
@@ -161,7 +225,7 @@ if (!S) S = {
   own: { cyan: 1, gold: ls('cr_skin_gold') === 'true' ? 1 : 0, magenta: 0 },
   up: { shield: ls('cr_shield') === 'true' ? 1 : 0, magnet: ls('cr_magnet') === 'true' ? 1 : 0, life: 0, boost: 0 }
 };
-function save() { localStorage.setItem('cr2', JSON.stringify(S)); $('stars-count').innerText = S.stars; $('high-score').innerText = S.high + ' PTS'; $('m-stars').innerText = S.stars; leagueUI(); }
+function save() { localStorage.setItem('cr2', JSON.stringify(S)); $('stars-count').innerText = S.stars; $('high-score').innerText = S.high + ' PTS'; $('m-stars').innerText = S.stars; leagueUI(); adLeft(); }
 
 const META = [
   { id: 'shield', n: '🛡️ Escudo de Inicio', d: 'Empiezas cada carrera con 1 escudo', c: 50, max: 1 },
@@ -170,13 +234,13 @@ const META = [
   { id: 'boost', n: '💫 Minero Estelar', d: '+1 estrella por recolección', c: 300, max: 3 }
 ];
 const SKINS = {
-  cyan:    { i: '🚀', c: '#06b6d4', n: 'Neón Cyan', p: 0,    ai: '⚡', ab: 'Dash',        cd: 270,  d: 'Embestida invulnerable que destruye lo que toques' },
+  cyan:    { i: '🚀', c: '#06b6d4', n: 'Neón Cyan', p: 0,    ai: '⚡', ab: 'Dash',        cd: 240,  d: 'Embestida invulnerable que destruye lo que toques' },
   gold:    { i: '👑', c: '#f59e0b', n: 'Void Gold', p: 250,  ai: '🛡️', ab: 'Égida',       cd: 600,  d: '2.5s invulnerable y atrae todas las estrellas' },
   magenta: { i: '🔮', c: '#d946ef', n: 'Plasma',    p: 400,  ai: '💠', ab: 'Pulso EMP',   cd: 780,  d: 'Destruye todo en pantalla y daña al jefe' },
-  ice:     { i: '❄️', c: '#7dd3fc', n: 'Cryo',      p: 500,  ai: '🧊', ab: 'Congelar',    cd: 660,  d: 'Ralentiza el tiempo 3.5 segundos' },
-  fire:    { i: '🔥', c: '#f97316', n: 'Fénix',     p: 650,  ai: '🔥', ab: 'Lluvia Ígnea', cd: 540, d: 'Descarga de fuego perforante en 3 carriles' },
+  ice:     { i: '❄️', c: '#7dd3fc', n: 'Cryo',      p: 500,  ai: '🧊', ab: 'Congelar',    cd: 660,  d: 'Ralentiza el tiempo 3.5s; los jefes reciben +25% de daño' },
+  fire:    { i: '🔥', c: '#f97316', n: 'Fénix',     p: 650,  ai: '🔥', ab: 'Lluvia Ígnea', cd: 660, d: 'Descarga de fuego perforante en 3 carriles' },
   toxic:   { i: '☣️', c: '#4ade80', n: 'Víbora',    p: 800,  ai: '☣️', ab: 'Rayo Tóxico', cd: 720,  d: 'Haz que arrasa todo en tu carril' },
-  diamond: { i: '💎', c: '#e0f2fe', n: 'Omega',     p: 1500, ai: '💖', ab: 'Reparación',  cd: 1500, d: '+1 vida, +1 escudo y 3s de invulnerabilidad' }
+  diamond: { i: '💎', c: '#e0f2fe', n: 'Omega',     p: 1500, ai: '💖', ab: 'Reparación',  cd: 1500, d: '+1 vida, escudo (máx. 1) y 3s de invulnerabilidad' }
 };
 function skinUI() {
   const k = SKINS[S.skin]; $('avatar-icon').innerText = k.i;
@@ -190,9 +254,9 @@ const POOL = [
   { id: 'life', i: '❤️', n: 'Reparación', d: '+1 vida', max: 3, f: () => R.lives++ },
   { id: 'gun', i: '🔫', n: 'Cañón Automático', d: 'Dispara solo; más nivel = más cadencia', max: 4 },
   { id: 'pierce', i: '🎯', n: 'Balas Perforantes', d: 'Los disparos atraviesan enemigos', max: 1 },
-  { id: 'magnet', i: '🧲', n: 'Imán Estelar', d: 'Más radio para atraer estrellas', max: 3 },
+  { id: 'magnet', i: '🧲', n: 'Imán Estelar', d: 'Más radio para atraer estrellas', max: 2 },
   { id: 'star', i: '⭐', n: 'Lluvia Estelar', d: '+1 estrella por recolección', max: 3 },
-  { id: 'slow', i: '⏳', n: 'Tiempo Lento', d: 'Reduce la velocidad un 10%', max: 3 },
+  { id: 'slow', i: '⏳', n: 'Tiempo Lento', d: 'Reduce la velocidad un 10%', max: 2 },
   { id: 'dash', i: '⚡', n: 'Turbo', d: 'Tu habilidad se recarga 20% más rápido', max: 3 },
   { id: 'nova', i: '💥', n: 'Nova', d: 'Al recibir daño, destruye todos los enemigos', max: 1 },
   { id: 'score', i: '📈', n: 'Multiplicador', d: '+25% de puntos', max: 3 }
@@ -216,7 +280,7 @@ const bg = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(
 const u = id => R.u?.[id] || 0;
 
 function newRun() {
-  R = { u: {}, lives: 1 + S.up.life, shield: S.up.shield, level: 1, prev: 0, next: 300, dist: 0, bonus: 0,
+  R = { u: {}, lives: 1 + S.up.life, shield: S.up.shield || (isVip() ? 1 : 0), level: 1, prev: 0, next: 300, dist: 0, bonus: 0,
         inv: 0, dash: 0, dcd: 0, fire: 0, sp: 40, runStars: 0, revived: false };
   if (S.up.magnet) R.u.magnet = 1;
   obs = []; coins = []; bullets = []; parts = []; debris = []; rings = []; P.lane = 1; P.x = W / 2; score = 0; lastScore = -1;
@@ -247,8 +311,9 @@ function renderShop() {
       <div class="text-2xl mb-1">${s.i}</div><div class="text-xs font-bold">${s.n}</div><div class="text-[9px] text-slate-400 leading-tight">${s.ai} ${s.ab} · ${Math.round(s.cd / 60)}s</div>
       <div class="text-[10px] font-bold mt-1" style="color:${own ? s.c : '#fbbf24'}">${eq ? 'EQUIPADO' : own ? 'SELECCIONAR' : s.p + ' ⭐'}</div></div>`;
   }).join('');
+  const prem = '<div class="text-xs font-bold text-amber-400 uppercase tracking-wider mt-3">Premium · Telegram Stars</div>' + PREM.map(m => `<div class="bg-slate-900/80 p-3 rounded-xl border border-amber-500/30 flex justify-between items-center"><div><div class="font-bold text-sm">${m.n}</div><div class="text-[11px] text-slate-400">${m.d}</div></div><button onclick="buyPremium('${m.id}')" class="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-bold text-xs rounded-lg font-orbitron">${m.id === 'vip' && isVip() ? 'ACTIVO' : m.x + ' ✨'}</button></div>`).join('');
   $('view-shop').innerHTML = `<div class="text-xs font-bold text-cyan-400 uppercase tracking-wider">Mejoras permanentes</div>${ups}
-    <div class="text-xs font-bold text-fuchsia-400 uppercase tracking-wider mt-3">Skins de Nave</div><div class="grid grid-cols-3 gap-2">${sk}</div>`;
+    <div class="text-xs font-bold text-fuchsia-400 uppercase tracking-wider mt-3">Skins de Nave</div><div class="grid grid-cols-3 gap-2">${sk}</div>${prem}`;
 }
 function buyUp(id) {
   const m = META.find(x => x.id === id), lv = S.up[id], cost = m.c * (lv + 1);
@@ -266,15 +331,13 @@ function leagueUI() {
   if (h > 3500) { l = 'Diamante'; i = '💎'; } else if (h > 1500) { l = 'Oro'; i = '🥇'; } else if (h > 500) { l = 'Plata'; i = '🥈'; }
   $('league-name').innerText = l; $('league-icon').innerText = i; $('m-league').innerText = i + ' ' + l;
 }
-function renderLeaderboard() {
-  const pl = [
-    { name: 'Alex_Vip', score: 8420, rank: '👑' }, { name: 'Nintrendo', score: 5200, rank: '💎' },
-    { name: 'Tú', score: S.high, rank: '⭐' }, { name: 'CryptoRider', score: 1200, rank: '🥈' }, { name: 'CyberBot', score: 350, rank: '🥉' }
-  ].sort((a, b) => b.score - a.score);
-  $('view-rank').innerHTML = '<div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Tabla de Posiciones Global</div>' + pl.map((p, i) =>
-    `<div class="flex justify-between items-center bg-slate-900/80 p-2.5 rounded-xl border ${p.name === 'Tú' ? 'border-cyan-500 bg-cyan-950/30' : 'border-slate-800'}">
-      <div class="flex items-center gap-2"><span class="font-bold text-xs w-4">${i + 1}.</span><span class="text-sm font-semibold">${p.name}</span></div>
-      <div class="flex items-center gap-2"><span class="font-orbitron font-bold text-xs text-cyan-400">${p.score} PTS</span><span>${p.rank}</span></div></div>`).join('');
+async function renderLeaderboard() {
+  const box = $('view-rank'); let top = null, me = null, se = null;
+  if (API) { box.innerHTML = '<div class="text-xs text-slate-400">Cargando ranking…</div>'; try { const r = await api('/leaderboard'); top = r.top; me = r.me; se = r.season; } catch (e) {} }
+  if (!top) top = [{ name: 'Alex_Vip', score: 8420 }, { name: 'Nintrendo', score: 5200 }, { name: 'Tú', score: S.high, me: 1 }, { name: 'CryptoRider', score: 1200 }, { name: 'CyberBot', score: 350 }].sort((a, b) => b.score - a.score);
+  const med = ['🥇', '🥈', '🥉'], row = (p, i) => `<div class="flex justify-between items-center p-2.5 rounded-xl border ${p.me ? 'border-cyan-500 bg-cyan-950/30' : 'border-slate-800 bg-slate-900/80'}"><div class="flex items-center gap-2"><span class="font-bold text-xs w-6">${med[i] || (p.rank || i + 1) + '.'}</span><span class="text-sm font-semibold truncate max-w-[130px]">${p.name}</span></div><span class="font-orbitron font-bold text-xs text-cyan-400">${p.score} PTS</span></div>`;
+  const left = se ? Math.max(0, Math.ceil((se.endsAt - Date.now()) / 864e5)) : 0;
+  box.innerHTML = `<div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-1">Ranking Global${se ? ' · temporada termina en ' + left + 'd' : ''}</div>` + top.map(row).join('') + (me && !top.some(p => p.me) ? '<div class="text-center text-slate-500 text-xs">···</div>' + row({ name: 'Tú', score: me.score, rank: me.rank, me: 1 }, 99) : '');
 }
 
 // ===== Anuncios =====
@@ -284,11 +347,28 @@ function adShow() {
     else res('none');
   });
 }
+const today = () => new Date().toISOString().slice(0, 10);
+function adLeft() {
+  const a = S.ad && S.ad.d === today() ? S.ad : { n: 0 }, d = S.daily || { d: '', s: 0 };
+  $('ad-lbl').innerText = `CONSEGUIR ESTRELLAS GRATIS (+15 ⭐) · ${Math.max(0, 5 - a.n)}/5 hoy`;
+  $('daily-btn').innerText = d.d === today() ? `🎁 Cofre reclamado · racha ${d.s} 🔥` : `🎁 COFRE DIARIO · día ${(d.s % 7) + 1}`;
+}
+function claimDaily() {
+  const d = S.daily || { d: '', s: 0 }; if (d.d === today()) return alert('Vuelve mañana por tu siguiente cofre 🎁');
+  const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10), n = d.d === y ? d.s + 1 : 1, g = n % 7 === 0 ? 100 : 10 + 5 * (n % 7);
+  S.daily = { d: today(), s: n }; S.stars += g; save(); sfx('win'); alert(`🎁 +${g} ⭐ (racha de ${n} días)`);
+}
 async function showAdForBonus() {
-  const r = await adShow();
-  if (r === 'ok') { S.stars += 15; save(); hap('notificationOccurred', 'success'); alert('¡Genial! Has ganado +15 Estrellas ⭐'); }
-  else if (r === 'fail') alert('No se pudo cargar el anuncio.');
-  else { S.stars += 10; save(); alert('Anuncio no disponible. Recompensa alternativa: +10 Estrellas ⭐'); }
+  const a = S.ad && S.ad.d === today() ? S.ad : { d: today(), n: 0, t: 0 }, w = 180 - (Date.now() - a.t) / 1000;
+  if (a.n >= 5) return alert('Límite diario alcanzado (5). ¡Vuelve mañana!');
+  if (w > 0) return alert('Espera ' + Math.ceil(w) + 's para el siguiente anuncio.');
+  const r = await adShow(); if (r === 'fail') return alert('No se pudo cargar el anuncio.');
+  a.n++; a.t = Date.now(); S.ad = a; S.stars += r === 'ok' ? 15 : 10; save(); hap('notificationOccurred', 'success');
+  alert(r === 'ok' ? '¡Genial! Has ganado +15 Estrellas ⭐' : 'Anuncio no disponible. Recompensa alternativa: +10 Estrellas ⭐');
+}
+async function doubleStars() {
+  if (R.dbl || R.runStars < 1) return; const r = await adShow(); if (r === 'fail') return alert('No se pudo cargar el anuncio.');
+  R.dbl = true; S.stars += R.runStars; save(); $('dbl-btn').classList.add('hidden'); sfx('win'); hap('notificationOccurred', 'success');
 }
 async function reviveWithAd() {
   const r = await adShow();
@@ -296,7 +376,7 @@ async function reviveWithAd() {
   if (r === 'none') alert('Anuncio no disponible. Te concedemos una vida extra.');
   R.revived = true; R.lives = 1; R.inv = 150; obs = []; bullets = [];
   if (R.boss) { R.boss.st = 0; R.boss.t = 0; if (R.boss.k === 2) R.boss.y = H * .17; }
-  closeDeath(); menu(false); sfx('revive'); state = 'run'; hud();
+  closeDeath(); menu(false); sfx('revive'); setMusic('game'); state = 'run'; hud();
 }
 async function rerollAd() {
   const r = await adShow();
@@ -310,7 +390,7 @@ function menu(show) {
   $('run-hud').classList.toggle('hidden', show);
   $('dash-btn').classList.toggle('hidden', show);
 }
-function startGame() { newRun(); closeDeath(); $('boss-hud').classList.add('hidden'); menu(false); state = 'run'; hud(); }
+function startGame() { newRun(); closeDeath(); setMusic('game'); $('boss-hud').classList.add('hidden'); menu(false); state = 'run'; hud(); }
 function shatter() {
   const c = SKINS[S.skin].c;
   for (let i = 0; i < 10; i++) { const a = Math.random() * 6.28, v = 1.5 + Math.random() * 4; debris.push({ x: P.x, y: P.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1.5, r: Math.random() * 6, vr: (Math.random() - .5) * .35, s: 8 + Math.random() * 11, c, l: 1 }); }
@@ -318,8 +398,8 @@ function shatter() {
   rings.push({ x: P.x, y: P.y, r: 10, c: '#fff' }, { x: P.x, y: P.y, r: -20, c: '#fb923c' }); shake = 28;
 }
 function gameOver() {
-  state = 'dying'; R.dy = 0; R.nb = score > S.high; if (R.nb) S.high = score; save();
-  $('dash-btn').classList.add('hidden'); shatter(); sfx('death'); sfx('boom'); hap('notificationOccurred', 'error');
+  state = 'dying'; R.dy = 0; R.nb = score > S.high; if (R.nb) S.high = score; save(); submitScore();
+  setMusic('off'); $('dash-btn').classList.add('hidden'); shatter(); sfx('death'); sfx('boom'); hap('notificationOccurred', 'error');
 }
 function showDeath() {
   state = 'over';
@@ -327,11 +407,12 @@ function showDeath() {
   $('d-stats').innerHTML = c('Puntos', score, 'text-cyan-400') + c('Nivel', R.level, 'text-fuchsia-400') + c('Estrellas', '+' + R.runStars, 'text-amber-400');
   $('d-killer').innerHTML = (R.boss ? 'Caíste ante <b class="text-red-400">' + R.boss.n + '</b>' : 'Tu nave fue destruida') + (R.nb ? '<div class="text-amber-400 font-bold mt-1">🏆 ¡NUEVO RÉCORD!</div>' : '');
   $('revive-btn').classList.toggle('hidden', R.revived);
+  const db = $('dbl-btn'); db.classList.toggle('hidden', !!R.dbl || R.runStars < 1); db.innerText = '📺 ×2 ESTRELLAS (+' + R.runStars + ' ⭐)';
   const o = $('death-overlay'); o.classList.remove('hidden'); o.classList.add('flex'); setTimeout(() => o.classList.remove('opacity-0'), 30);
 }
 function closeDeath() { const o = $('death-overlay'); o.classList.add('hidden', 'opacity-0'); o.classList.remove('flex'); }
 function retry() { closeDeath(); startGame(); }
-function toMenu() { closeDeath(); state = 'menu'; switchTab('play'); menu(true); }
+function toMenu() { closeDeath(); setMusic('menu'); state = 'menu'; switchTab('play'); menu(true); }
 function showPick(again) {
   state = 'pick'; sfx(R.bossPick ? 'win' : 'pick'); $('pick-title').innerText = R.bossPick ? '¡JEFE DERROTADO!' : '¡NIVEL ' + R.level + '!';
   const opts = POOL.filter(p => u(p.id) < p.max).sort(() => Math.random() - .5).slice(0, 3);
@@ -358,20 +439,20 @@ function dash() {
   else if (k === 'gold') { R.aegis = 150; sfx('aegis'); }
   else if (k === 'magenta') {
     obs.forEach(o => boom(o.x, o.y || P.y, '#e879f9', 12)); R.bonus += obs.length * 20; obs = [];
-    if (R.boss && R.boss.y > 0) { R.boss.hp -= 10; R.boss.hit = 8; }
+    if (R.boss && R.boss.y > 0 && !(R.boss.sh > 0)) { R.boss.hp -= R.boss.max * .12; R.boss.hit = 8; }
     shake = 16; sfx('emp'); rings.push({ x: P.x, y: P.y, r: -30, c: '#fff' });
   }
   else if (k === 'ice') { R.freeze = 210; sfx('freeze'); }
   else if (k === 'fire') { for (let l = 0; l < 3; l++) for (let i = 0; i < 5; i++) bullets.push({ x: laneX(l), y: P.y - 30 - i * 45, pc: 1 }); shake = 6; sfx('fire'); }
   else if (k === 'toxic') { R.beam = 90; sfx('beam'); }
-  else if (k === 'diamond') { R.lives++; R.shield++; R.aegis = 180; hud(); sfx('heal'); }
+  else if (k === 'diamond') { R.lives = Math.min(5, R.lives + 1); if (R.shield < 1) R.shield = 1; R.aegis = 180; hud(); sfx('heal'); }
   rings.push({ x: P.x, y: P.y, r: 10, c: sk.c });
 }
 $('dash-btn').addEventListener('pointerdown', e => { e.stopPropagation(); dash(); });
 cv.addEventListener('pointerdown', e => {
   if (state !== 'run') return;
   const x = e.clientX - cv.getBoundingClientRect().left;
-  if (x < W / 2) { if (P.lane > 0) P.lane--; } else if (P.lane < 2) P.lane++;
+  if ((x < W / 2) !== (R.rev > 0)) { if (P.lane > 0) P.lane--; } else if (P.lane < 2) P.lane++;
   sfx('lane'); hap('impactOccurred', 'medium');
 });
 addEventListener('keydown', e => {
@@ -387,7 +468,7 @@ function boom(x, y, c, n = 14) {
 }
 function hurt() {
   if (R.inv > 0 || R.dash > 0 || R.aegis > 0) return;
-  shake = 14; R.inv = 90; sfx('hurt'); hap('notificationOccurred', 'warning');
+  shake = 14; R.inv = 90; sfx('hurt'); mus.hit = 12; hap('notificationOccurred', 'warning');
   if (R.shield > 0) R.shield--; else R.lives--;
   boom(P.x, P.y, '#38bdf8', 22);
   if (u('nova')) { obs.forEach(o => boom(o.x, o.y || P.y, '#ef4444', 8)); obs = []; }
@@ -410,11 +491,11 @@ function update(dt) {
   P.x += (laneX(P.lane) - P.x) * Math.min(.3, .25 * dt); P.y = H - 100;
   if (R.inv > 0) R.inv -= dt; if (R.dcd > 0) R.dcd -= dt;
   if (R.dash > 0) { R.dash -= dt; parts.push({ x: P.x, y: P.y + 10, vx: 0, vy: 2, l: 1, c: '#d946ef', s: 8 }); }
-  if (R.aegis > 0) R.aegis -= dt; if (R.freeze > 0) R.freeze -= dt;
+  if (R.aegis > 0) R.aegis -= dt; if (R.freeze > 0) R.freeze -= dt; if (R.rev > 0) R.rev -= dt;
   if (R.beam > 0) {
     R.beam -= dt; const bx = P.x;
     obs = obs.filter(o => { if (Math.abs(o.x - bx) < W / 6) { boom(o.x, o.y || P.y, '#4ade80', 10); R.bonus += 20; return false; } return true; });
-    if (R.boss && R.boss.y > 0 && Math.abs(R.boss.x - bx) < R.boss.w + W / 8) { R.boss.hp -= .22 * dt; R.boss.hit = 2; }
+    if (R.boss && R.boss.y > 0 && Math.abs(R.boss.x - bx) < R.boss.w + W / 8 && !(R.boss.sh > 0)) { R.boss.hp -= R.boss.max * .002 * dt; R.boss.hit = 2; }
   }
   const gl = Math.max(u('gun'), R.boss ? 2 : 0); if (gl) { R.fire -= dt; if (R.fire <= 0) { R.fire = 38 - gl * 7; bullets.push({ x: P.x, y: P.y - 24 }); sfx('shoot'); } }
   bullets.forEach(b => b.y -= 14 * dt); bullets = bullets.filter(b => b.y > -20);
@@ -425,7 +506,7 @@ function update(dt) {
     const c = coins[i]; c.y += sp;
     const m = u('magnet'); if ((m || R.aegis > 0) && Math.hypot(P.x - c.x, P.y - c.y) < (R.aegis > 0 ? 700 : 60 + m * 70)) { c.x += (P.x - c.x) * .25; c.y += (P.y - c.y) * .25; }
     if (Math.hypot(P.x - c.x, P.y - c.y) < P.s + 14) {
-      const g = 1 + u('star') + S.up.boost; S.stars += g; R.runStars += g; coins.splice(i, 1);
+      const g = (1 + u('star') + S.up.boost) * (isVip() ? 2 : 1); S.stars += g; R.runStars += g; coins.splice(i, 1);
       sfx('coin'); boom(c.x, c.y, '#fbbf24', 6); $('stars-count').innerText = S.stars; hap('impactOccurred', 'light');
     } else if (c.y > H + 30) coins.splice(i, 1);
   }
@@ -456,22 +537,22 @@ function update(dt) {
 }
 
 // ===== Jefes =====
-const BOSSES = [{ n: 'CENTINELA', c: '#22d3ee', w: 50, h: 38 }, { n: 'PRISMA', c: '#a78bfa', w: 56, h: 40 }, { n: 'TITÁN', c: '#f97316', w: 62, h: 44 }];
+const BOSSES = [{ n: 'CENTINELA', c: '#22d3ee', w: 50, h: 38 }, { n: 'PRISMA', c: '#a78bfa', w: 56, h: 40 }, { n: 'TITÁN', c: '#f97316', w: 62, h: 44 }, { n: 'ENJAMBRE', c: '#facc15', w: 58, h: 42 }, { n: 'VÓRTICE', c: '#c084fc', w: 54, h: 46 }];
 function startBoss() {
-  const tier = R.level / 5, k = (tier - 1) % 3, d = BOSSES[k], max = 40 + tier * 18;
-  R.lvlBoss = R.level; obs = []; bullets = []; R.ban = 150; shake = 10; sfx('boss');
-  R.boss = { k, tier, n: d.n + (tier > 3 ? ' MK' + Math.ceil(tier / 3) : ''), c: d.c, w: d.w, h: d.h, hp: max, max, x: W / 2, y: -90, t: 0, st: 0, lane: 1, hit: 0, dh: 0, cn: 0 };
+  const tier = R.level / 5, k = (tier - 1) % 5, d = BOSSES[k], max = 60 + tier * 26;
+  R.lvlBoss = R.level; obs = []; bullets = []; R.ban = 150; shake = 10; sfx('boss'); mus.step = Math.ceil(mus.step / 16) * 16;
+  R.boss = { k, tier, n: d.n + (tier > 5 ? ' MK' + Math.ceil(tier / 5) : ''), c: d.c, w: d.w, h: d.h, hp: max, max, x: W / 2, y: -90, t: 0, st: 0, lane: 1, hit: 0, dh: 0, cn: 0 };
   $('boss-hud').classList.remove('hidden'); $('boss-name').innerText = '☠ ' + R.boss.n; hap('notificationOccurred', 'warning');
 }
 function wall() { const g = Math.floor(Math.random() * 3); [0, 1, 2].filter(l => l !== g).forEach(l => obs.push({ t: 'block', lane: l, x: laneX(l), y: -30, hp: 1, s: 18, tm: 0 })); }
 function updateBoss(dt) {
-  const B = R.boss, cd = Math.max(.65, 1 - .08 * B.tier), ph2 = B.hp < B.max / 2, home = H * .17;
-  if (R.ban > 0) R.ban -= dt; if (B.hit > 0) B.hit -= dt; B.t += dt;
+  const B = R.boss, cd = Math.max(.65, 1 - .08 * B.tier) * (B.hp < B.max * .25 ? .8 : 1), ph2 = B.hp < B.max / 2, home = H * .17;
+  if (R.ban > 0) R.ban -= dt; if (B.hit > 0) B.hit -= dt; if (B.sh > 0) B.sh -= dt; B.t += dt;
   if (!(B.k === 2 && B.st === 2)) B.y += (home - B.y) * .05 * dt;
   for (let j = bullets.length - 1; j >= 0; j--) {
     const b = bullets[j];
     if (b.hb || B.y < 0 || Math.abs(b.y - B.y) > B.h || Math.abs(b.x - B.x) > B.w) continue;
-    B.hp--; B.hit = 4; boom(b.x, b.y, '#fde047', 3); if (u('pierce') || b.pc) b.hb = 1; else bullets.splice(j, 1);
+    if (B.sh > 0) { bullets.splice(j, 1); boom(b.x, b.y, '#fff', 2); continue; } B.hp -= (b.pc ? Math.max(1, B.max * .01) : 1) * (R.freeze > 0 ? 1.25 : 1); B.hit = 4; boom(b.x, b.y, '#fde047', 3); if (u('pierce') || b.pc) b.hb = 1; else bullets.splice(j, 1);
   }
   if (B.k === 0) { // Centinela: apunta y dispara orbes por carril
     B.x += (laneX(B.lane) - B.x) * .07 * dt;
@@ -483,20 +564,30 @@ function updateBoss(dt) {
     }
   } else if (B.k === 1) { // Prisma: dos láseres, un carril seguro (+ drones en fase 2)
     B.x = W / 2 + Math.sin(R.t * .02) * W * .28;
-    if (B.t > 170 * cd) {
+    if (B.t > Math.max(115, 170 * cd)) {
       B.t = 0; const safe = Math.floor(Math.random() * 3);
       [0, 1, 2].filter(l => l !== safe).forEach(l => obs.push({ t: 'laser', lane: l, x: laneX(l), y: -30, hp: 1, s: 0, tm: 0 }));
       if (ph2) obs.push({ t: 'drone', lane: safe, x: laneX(safe), y: B.y + B.h, hp: 1, s: 16, tm: 0 });
     }
-  } else { // Titán: embiste tu carril; hazle Dash para dañarlo
+  } else if (B.k === 2) { // Titán: embiste tu carril; hazle Dash para dañarlo
     if (B.st === 0) { B.x += (P.x - B.x) * .05 * dt; if (B.t > 110 * cd) { B.lane = P.lane; B.st = 1; B.t = 0; } }
     else if (B.st === 1) { B.x += (laneX(B.lane) - B.x) * .2 * dt; if (B.t > (ph2 ? 35 : 55)) { B.st = 2; B.dh = 0; shake = 8; sfx('charge'); } }
     else if (B.st === 2) { B.y += 20 * dt; if (B.y > H + 60) { B.st = 3; B.t = 0; B.cn++; if (ph2 || B.cn % 2 === 0) wall(); } }
     else if (B.t > 40) { B.st = 0; B.t = 0; }
     if (B.st === 2 && Math.abs(P.x - B.x) < B.w * .8 && Math.abs(P.y - B.y) < B.h + P.s) {
-      if (R.dash > 0 || R.aegis > 0) { if (!B.dh) { B.dh = 1; B.hp -= 8; B.hit = 8; shake = 14; boom(B.x, B.y + B.h, '#fff', 30); } }
+      if (R.dash > 0 || R.aegis > 0) { if (!B.dh) { B.dh = 1; B.hp -= B.max * .1; B.hit = 8; shake = 14; boom(B.x, B.y + B.h, '#fff', 30); } }
       else { hurt(); if (state !== 'run') return; }
     }
+  }
+  else if (B.k === 3) { // Enjambre: escudo de energía (inmune) + drones
+    B.x = W / 2 + Math.sin(R.t * .03) * W * .3;
+    if (B.t > 230 * cd) {
+      B.t = 0; B.sh = 170; sfx('aegis');
+      [0, 1, 2].sort(() => Math.random() - .5).slice(0, ph2 ? 3 : 2).forEach(l => obs.push({ t: 'drone', lane: l, x: laneX(l), y: B.y + B.h, hp: 1, s: 16, tm: 0 }));
+    }
+  } else { // Vórtice: teletransporte, muros y controles invertidos
+    B.x += (laneX(B.lane) - B.x) * .12 * dt;
+    if (B.t > 130 * cd) { B.t = 0; B.lane = Math.floor(Math.random() * 3); wall(); if (!(R.rev > 0) && (ph2 || B.cn++ % 2 === 0)) { R.rev = 210; sfx('curse'); hap('notificationOccurred', 'warning'); } }
   }
   $('boss-bar').style.width = Math.max(0, B.hp / B.max * 100) + '%';
   if (B.hp <= 0) {
@@ -513,11 +604,14 @@ function drawBoss() {
   ctx.fillStyle = B.hit > 0 ? '#fff' : B.c; ctx.shadowColor = B.c; ctx.shadowBlur = 24; ctx.beginPath();
   if (B.k === 0) { ctx.moveTo(0, -B.h); ctx.lineTo(B.w, 0); ctx.lineTo(0, B.h); ctx.lineTo(-B.w, 0); }
   else if (B.k === 1) { ctx.rotate(Math.sin(R.t * .03) * .15); ctx.moveTo(0, B.h); ctx.lineTo(B.w, -B.h); ctx.lineTo(-B.w, -B.h); }
-  else { ctx.moveTo(-B.w, -B.h); ctx.lineTo(B.w, -B.h); ctx.lineTo(B.w, B.h * .4); ctx.lineTo(B.w * .5, B.h); ctx.lineTo(-B.w * .5, B.h); ctx.lineTo(-B.w, B.h * .4); }
+  else if (B.k === 2) { ctx.moveTo(-B.w, -B.h); ctx.lineTo(B.w, -B.h); ctx.lineTo(B.w, B.h * .4); ctx.lineTo(B.w * .5, B.h); ctx.lineTo(-B.w * .5, B.h); ctx.lineTo(-B.w, B.h * .4); }
+  else if (B.k === 3) { for (let i = 0; i < 6; i++) ctx.lineTo(Math.cos(i * 1.047) * B.w, Math.sin(i * 1.047) * B.h); }
+  else { ctx.rotate(R.t * .04); for (let i = 0; i < 16; i++) { const r = i % 2 ? B.w * .5 : B.w; ctx.lineTo(Math.cos(i * .3927) * r, Math.sin(i * .3927) * r); } }
   ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
   const ey = B.k === 1 ? -B.h * .2 : 0, ex = Math.max(-6, Math.min(6, (P.x - B.x) / 20));
   ctx.fillStyle = '#0b0f19'; ctx.beginPath(); ctx.arc(0, ey, 15, 0, 6.28); ctx.fill();
   ctx.fillStyle = B.st === 1 ? '#ef4444' : B.c; ctx.beginPath(); ctx.arc(ex, ey, 7, 0, 6.28); ctx.fill();
+  if (B.sh > 0) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.shadowColor = '#fff'; ctx.shadowBlur = 20; ctx.beginPath(); ctx.arc(0, 0, B.w + 14, 0, 6.28); ctx.stroke(); ctx.shadowBlur = 0; }
   ctx.restore();
   if (R.ban > 0 && Math.floor(R.ban / 8) % 2) { ctx.fillStyle = '#ef4444'; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 20; ctx.font = '900 26px Orbitron'; ctx.textAlign = 'center'; ctx.fillText('⚠ ' + B.n + ' ⚠', W / 2, H * .45); ctx.shadowBlur = 0; }
 }
@@ -554,6 +648,7 @@ function draw(dt) {
   });
   if (R.boss) drawBoss();
   if (R.freeze > 0) { ctx.fillStyle = 'rgba(125,211,252,.12)'; ctx.fillRect(0, 0, W, H); }
+  if (R.rev > 0) { ctx.fillStyle = 'rgba(168,85,247,.14)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#e9d5ff'; ctx.font = '700 14px Orbitron'; ctx.textAlign = 'center'; ctx.fillText('🌀 CONTROLES INVERTIDOS', W / 2, H * .3); }
   if (R.beam > 0) { ctx.fillStyle = `rgba(74,222,128,${.35 + Math.random() * .25})`; ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 30; ctx.fillRect(P.x - W / 12, 0, W / 6, P.y); ctx.fillStyle = '#ecfccb'; ctx.fillRect(P.x - 6, 0, 12, P.y); ctx.shadowBlur = 0; }
   ctx.fillStyle = '#fde047'; ctx.shadowColor = '#fde047'; ctx.shadowBlur = 10; bullets.forEach(b => { ctx.fillStyle = b.pc ? '#fb923c' : '#fde047'; ctx.shadowColor = ctx.fillStyle; ctx.fillRect(b.x - (b.pc ? 4 : 2), b.y - 10, b.pc ? 8 : 4, b.pc ? 22 : 14); }); ctx.shadowBlur = 0;
   parts.forEach(p => { p.x += p.vx; p.y += p.vy; p.l -= .04; ctx.globalAlpha = Math.max(0, p.l); ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, p.s, p.s); });
@@ -599,7 +694,7 @@ function loop(t) {
 
 // ===== Init =====
 skinUI(); $('mute-btn').innerText = S.mute ? '🔇' : '🔊';
-save(); switchTab('play'); requestAnimationFrame(loop);
+save(); switchTab('play'); requestAnimationFrame(loop); syncMe();
 </script>
 </body>
 </html>
