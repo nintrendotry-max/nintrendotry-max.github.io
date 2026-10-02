@@ -1,1184 +1,185 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Telegram Cyber Dash - Infinite Runner</title>
-    <!-- Telegram Web App SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- Ad SDK Integration -->
-    <script src='//libtl.com/sdk.js' data-zone='11937368' data-sdk='show_11937368'></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
+  <title>Cyber Runner Mini App</title>
+  
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        tg: {
-                            blue: '#24A1DE',
-                            darkBlue: '#17212B',
-                            bg: '#0F172A',
-                            accent: '#38BDF8',
-                            gold: '#F59E0B'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        * {
-            touch-action: manipulation;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        body {
-            background-color: #0F172A;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            overflow: hidden;
-            margin: 0;
-            padding: 0;
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
-        /* Custom Scrollbars */
-        ::-webkit-scrollbar {
-            width: 4px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.6);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #24A1DE;
-            border-radius: 4px;
-        }
-    </style>
+  <!-- SDK de Anuncios (Con respaldo para no bloquear el juego) -->
+  <script src="//libtl.com/sdk.js" data-zone="11937368" data-sdk="show_11937368" async onError="window.adSdkFailed = true;"></script>
+
+  <style>
+    body { touch-action: manipulation; }
+    canvas { display: block; }
+  </style>
 </head>
-<body class="text-white h-screen w-screen flex flex-col justify-between overflow-hidden select-none">
+<body class="bg-slate-950 text-white font-sans overflow-hidden select-none">
 
-    <!-- Top HUD Bar -->
-    <div id="hud-top" class="absolute top-0 left-0 right-0 z-10 flex justify-between items-center p-3 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
-        <!-- Score & Multiplier -->
-        <div class="flex items-center space-x-3">
-            <div class="bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700/50 flex items-center gap-2">
-                <i class="fa-solid fa-bolt text-cyan-400 text-sm"></i>
-                <span id="score-text" class="font-bold text-lg tracking-wider text-cyan-400">0m</span>
-            </div>
-            <div id="multiplier-badge" class="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs px-2 py-1 rounded-lg font-bold">
-                1x MULT
-            </div>
-        </div>
-
-        <!-- Telegram Stars Balance -->
-        <div class="flex items-center space-x-2">
-            <div class="bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl flex items-center space-x-1.5">
-                <span class="text-amber-400 font-black text-base">⭐</span>
-                <span id="stars-balance-text" class="font-extrabold text-amber-300">0</span>
-            </div>
-            <button onclick="openShopModal()" class="bg-tg-blue hover:bg-sky-400 text-white p-2 rounded-xl transition active:scale-95 shadow-lg shadow-sky-500/20">
-                <i class="fa-solid fa-store"></i>
-            </button>
-        </div>
+  <!-- HUD superior -->
+  <div class="fixed top-0 left-0 right-0 p-4 flex justify-between items-center z-10 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
+    <div class="flex items-center space-x-2">
+      <span class="text-xl">⭐</span>
+      <span id="stars-count" class="font-bold text-yellow-400">0</span>
     </div>
-
-    <!-- Active Power-up Status Bar -->
-    <div id="powerup-bar-container" class="absolute top-16 left-3 right-3 z-10 flex flex-col gap-1 pointer-events-none"></div>
-
-    <!-- Main Game Canvas Container -->
-    <div class="relative w-full h-full flex-grow overflow-hidden">
-        <canvas id="gameCanvas"></canvas>
-
-        <!-- Touch Controls Layer (Mobile Swipes & On-screen buttons) -->
-        <div id="touch-controls" class="absolute inset-0 z-20 grid grid-cols-3 grid-rows-2 opacity-0 pointer-events-auto">
-            <div id="touch-left" class="row-span-2"></div>
-            <div id="touch-jump" class="col-span-1"></div>
-            <div id="touch-right" class="row-span-2 col-start-3"></div>
-            <div id="touch-slide" class="col-start-2 row-start-2"></div>
-        </div>
-
-        <!-- Start Screen Overlay -->
-        <div id="start-screen" class="absolute inset-0 z-30 flex flex-col items-center justify-between p-6 bg-slate-950/85 backdrop-blur-md">
-            <div class="mt-12 text-center">
-                <div class="w-20 h-20 mx-auto mb-3 bg-gradient-to-tr from-tg-blue to-cyan-400 rounded-3xl flex items-center justify-center shadow-lg shadow-cyan-500/30 animate-bounce">
-                    <i class="fa-solid fa-paper-plane text-4xl text-white -rotate-12"></i>
-                </div>
-                <h1 class="text-3xl font-black tracking-tight text-white mb-1">CYBER DASH</h1>
-                <p class="text-xs text-slate-400">Telegram Runner Edition</p>
-            </div>
-
-            <!-- Onboarding / HighScore Card -->
-            <div class="w-full max-w-xs bg-slate-900/90 border border-slate-800 rounded-2xl p-4 text-center shadow-xl">
-                <div class="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-1">Personal Best</div>
-                <div id="start-highscore-text" class="text-3xl font-black text-amber-400">0 m</div>
-                <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
-                    <div class="bg-slate-800/50 p-2 rounded-xl">
-                        <i class="fa-solid fa-arrows-left-right text-cyan-400 block mb-1"></i>
-                        Swipe L/R
-                    </div>
-                    <div class="bg-slate-800/50 p-2 rounded-xl">
-                        <i class="fa-solid fa-arrow-up text-emerald-400 block mb-1"></i>
-                        Swipe Up
-                    </div>
-                    <div class="bg-slate-800/50 p-2 rounded-xl">
-                        <i class="fa-solid fa-arrow-down text-amber-400 block mb-1"></i>
-                        Slide Down
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Action Buttons -->
-            <div class="w-full max-w-xs flex flex-col gap-2 mb-4">
-                <button onclick="startGame()" class="w-full py-4 bg-gradient-to-r from-tg-blue to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-black text-lg rounded-2xl shadow-lg shadow-cyan-500/30 active:scale-98 transition flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-play"></i> START RUN
-                </button>
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="openShopModal()" class="py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 font-bold rounded-xl text-sm flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-shop"></i> Shop
-                    </button>
-                    <button onclick="openLeaderboardModal()" class="py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-400 font-bold rounded-xl text-sm flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-trophy"></i> Ranking
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Game Over Modal -->
-        <div id="gameover-modal" class="hidden absolute inset-0 z-40 flex flex-col items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
-            <div class="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center shadow-2xl relative">
-                <div class="w-14 h-14 bg-red-500/20 border border-red-500/40 rounded-2xl flex items-center justify-center mx-auto mb-3 text-red-400 text-2xl">
-                    <i class="fa-solid fa-skull"></i>
-                </div>
-                <h2 class="text-2xl font-black text-white mb-1">RUN CRASHED</h2>
-                <p class="text-xs text-slate-400 mb-4">Obstacle collision detected</p>
-
-                <!-- Stats summary -->
-                <div class="bg-slate-950/60 rounded-2xl p-3 border border-slate-800/80 mb-4 space-y-2">
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-slate-400">Distance</span>
-                        <span id="go-distance" class="font-extrabold text-cyan-400">0 m</span>
-                    </div>
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-slate-400">Stars Picked</span>
-                        <span id="go-stars" class="font-extrabold text-amber-400">⭐ 0</span>
-                    </div>
-                    <div class="h-px bg-slate-800 my-1"></div>
-                    <div class="flex justify-between items-center text-base">
-                        <span class="text-slate-300 font-bold">Total Score</span>
-                        <span id="go-total-score" class="font-black text-emerald-400">0 pts</span>
-                    </div>
-                </div>
-
-                <!-- Revive Button (Rewarded Ad Simulation) -->
-                <div id="revive-container" class="mb-3">
-                    <button id="revive-btn" onclick="watchAdToRevive()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black rounded-xl text-sm shadow-md shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-film"></i> Watch Ad to Revive (1/1)
-                    </button>
-                </div>
-
-                <!-- Restart Button -->
-                <button onclick="startGame()" class="w-full py-3.5 bg-tg-blue hover:bg-sky-400 text-slate-950 font-black rounded-xl text-sm transition active:scale-95 flex items-center justify-center gap-2 mb-2">
-                    <i class="fa-solid fa-rotate-right"></i> Play Again
-                </button>
-                <button onclick="showStartScreen()" class="w-full py-2.5 bg-slate-800 text-slate-300 font-semibold rounded-xl text-xs hover:bg-slate-700 transition">
-                    Main Menu
-                </button>
-            </div>
-        </div>
+    <div class="text-right">
+      <div class="text-xs text-slate-400">Puntaje</div>
+      <div id="score-count" class="font-bold text-cyan-400">0</div>
     </div>
-
-    <!-- Shop Modal -->
-    <div id="shop-modal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-lg flex flex-col p-4">
-        <div class="flex justify-between items-center pb-3 border-b border-slate-800">
-            <h2 class="text-xl font-black text-amber-400 flex items-center gap-2">
-                <i class="fa-solid fa-store"></i> Telegram Stars Shop
-            </h2>
-            <button onclick="closeShopModal()" class="text-slate-400 hover:text-white p-2 text-lg">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-
-        <div class="flex-grow overflow-y-auto py-4 space-y-4">
-            <!-- Buy Stars Pack Section -->
-            <div class="bg-slate-900 border border-amber-500/30 rounded-2xl p-4">
-                <div class="flex justify-between items-center mb-3">
-                    <div>
-                        <h3 class="font-black text-white text-sm">Need More Telegram Stars?</h3>
-                        <p class="text-xs text-slate-400">Watch short ad for free stars</p>
-                    </div>
-                    <button onclick="watchAdForFreeStars()" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1 shadow-md shadow-amber-500/20 active:scale-95">
-                        🎬 Watch Ad (+25 ⭐)
-                    </button>
-                </div>
-            </div>
-
-            <!-- Upgrades List -->
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">Power Up Upgrades</h3>
-            <div id="upgrades-list" class="space-y-2"></div>
-
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1 mt-4">Runner Skins</h3>
-            <div id="skins-list" class="grid grid-cols-3 gap-2"></div>
-        </div>
-    </div>
-
-    <!-- Leaderboard & Quests Modal -->
-    <div id="leaderboard-modal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-lg flex flex-col p-4">
-        <div class="flex justify-between items-center pb-3 border-b border-slate-800">
-            <div class="flex gap-4">
-                <button id="tab-lb-btn" onclick="switchTab('lb')" class="text-lg font-black text-cyan-400 border-b-2 border-cyan-400 pb-1">Leaderboard</button>
-                <button id="tab-quests-btn" onclick="switchTab('quests')" class="text-lg font-black text-slate-500 pb-1">Daily Quests</button>
-            </div>
-            <button onclick="closeLeaderboardModal()" class="text-slate-400 hover:text-white p-2 text-lg">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-
-        <!-- Leaderboard Content -->
-        <div id="tab-lb-content" class="flex-grow overflow-y-auto py-4 space-y-2">
-            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <span class="font-black text-amber-400 w-6">#1</span>
-                    <div class="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs">TG</div>
-        <!-- Game Over Modal -->
-        <div id="gameover-modal" class="hidden absolute inset-0 z-40 flex flex-col items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
-            <div class="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center shadow-2xl relative">
-                <div class="w-14 h-14 bg-red-500/20 border border-red-500/40 rounded-2xl flex items-center justify-center mx-auto mb-3 text-red-400 text-2xl">
-                    <i class="fa-solid fa-skull"></i>
-                </div>
-                <h2 class="text-2xl font-black text-white mb-1">RUN CRASHED</h2>
-                <p class="text-xs text-slate-400 mb-4">Obstacle collision detected</p>
-
-                <!-- Stats summary -->
-                <div class="bg-slate-950/60 rounded-2xl p-3 border border-slate-800/80 mb-4 space-y-2">
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-slate-400">Distance</span>
-                        <span id="go-distance" class="font-extrabold text-cyan-400">0 m</span>
-                    </div>
-                    <div class="flex justify-between items-center text-sm">
-                        <span class="text-slate-400">Stars Picked</span>
-                        <span id="go-stars" class="font-extrabold text-amber-400">⭐ 0</span>
-                    </div>
-                    <div class="h-px bg-slate-800 my-1"></div>
-                    <div class="flex justify-between items-center text-base">
-                        <span class="text-slate-300 font-bold">Total Score</span>
-                        <span id="go-total-score" class="font-black text-emerald-400">0 pts</span>
-                    </div>
-                </div>
-
-                <!-- Revive Button (Integrated with Monetization Ad SDK) -->
-                <div id="revive-container" class="mb-3">
-                    <button id="revive-btn" onclick="watchAdToRevive()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black rounded-xl text-sm shadow-md shadow-amber-500/20 active:scale-95 transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-film"></i> Watch Ad to Revive (1/1)
-                    </button>
-                </div>
-
-                <!-- Restart Button -->
-                <button onclick="restartGameWithAd()" class="w-full py-3.5 bg-tg-blue hover:bg-sky-400 text-slate-950 font-black rounded-xl text-sm transition active:scale-95 flex items-center justify-center gap-2 mb-2">
-                    <i class="fa-solid fa-rotate-right"></i> Play Again
-                </button>
-                <button onclick="showStartScreen()" class="w-full py-2.5 bg-slate-800 text-slate-300 font-semibold rounded-xl text-xs hover:bg-slate-700 transition">
-                    Main Menu
-                </button>
-            </div>
-        </div>
-
-        <!-- Quests Content -->
-        <div id="tab-quests-content" class="hidden flex-grow overflow-y-auto py-4 space-y-3">
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
-                <div>
-                    <h4 class="font-bold text-sm text-white">Collect 50 Stars</h4>
-                    <p class="text-xs text-slate-400 mb-2">Reward: ⭐ 20 Extra</p>
-                    <div class="w-32 bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div id="quest1-bar" class="bg-amber-400 h-full w-0"></div>
-                    </div>
-                </div>
-                <button id="quest1-btn" onclick="claimQuest(1)" class="px-3 py-1.5 bg-slate-800 text-slate-500 font-bold text-xs rounded-xl" disabled>Claim</button>
-            </div>
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex justify-between items-center">
-                <div>
-                    <h4 class="font-bold text-sm text-white">Run 1,000 meters</h4>
-                    <p class="text-xs text-slate-400 mb-2">Reward: ⭐ 30 Extra</p>
-                    <div class="w-32 bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div id="quest2-bar" class="bg-cyan-400 h-full w-0"></div>
-                    </div>
-                </div>
-                <button id="quest2-btn" onclick="claimQuest(2)" class="px-3 py-1.5 bg-slate-800 text-slate-500 font-bold text-xs rounded-xl" disabled>Claim</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Simulated Rewarded Ad Countdown Overlay -->
-    <div id="ad-modal" class="hidden fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
-        <div class="w-16 h-16 bg-amber-500/20 border border-amber-500/40 rounded-full flex items-center justify-center text-amber-400 text-2xl mb-4 animate-pulse">
-            <i class="fa-solid fa-rectangle-ad"></i>
-        </div>
-        <h3 class="text-xl font-black text-white mb-1">SPONSORED ADVERTISEMENT</h3>
-        <p class="text-xs text-slate-400 mb-6">Monetag / Telegram Ads Simulation</p>
-
-        <div class="w-24 h-24 rounded-full border-4 border-amber-400 flex items-center justify-center text-4xl font-black text-amber-400 mb-6">
-            <span id="ad-timer">5</span>
-        </div>
-        <p class="text-xs text-slate-500">Revive reward will trigger automatically when finished...</p>
-    </div>
-
-    <script>
-        /* ==========================================================================
-           STREAMING_CHUNK: Integrating Real Monetization Ad SDK Functions
-           ========================================================================== */
-
-        // Wrapper function to trigger SDK Ads with promise handling & fallbacks
-        function triggerAdSDK() {
-            return new Promise((resolve) => {
-                if (typeof show_11937368 === 'function') {
-                    show_11937368()
-                        .then(() => resolve(true))
-                        .catch((err) => {
-                            console.warn("Ad closed or failed to load:", err);
-                            resolve(false);
-                        });
-                } else {
-                    console.warn("Ad SDK not loaded yet. Falling back.");
-                    resolve(true); // Graceful fallback
-                }
-            });
-        }
-
-        // Rewarded Ad to Revive Player
-        async function watchAdToRevive() {
-            if (reviveUsed) return;
-
-            triggerHaptic('medium');
-            const adCompleted = await triggerAdSDK();
-
-            if (adCompleted) {
-                reviveUsed = true;
-                document.getElementById('revive-container').classList.add('hidden');
-                document.getElementById('gameover-modal').classList.add('hidden');
-
-                // Revive Player State
-                isRunning = true;
-                isGameOver = false;
-                activePowerups.shield = true;
-                playSound('powerup');
-                requestAnimationFrame(gameLoop);
-            } else {
-                tg?.showAlert?.("Please watch the full ad to revive!");
-            }
-        }
-
-        // Rewarded Ad in Shop for Free Stars
-        async function watchAdForFreeStars() {
-            triggerHaptic('light');
-            const adCompleted = await triggerAdSDK();
-
-            if (adCompleted) {
-                state.stars += 25;
-                saveState();
-                playSound('star');
-                renderShopItems();
-                tg?.showAlert?.("🎉 You earned +25 Telegram Stars!");
-            }
-        }
-
-        // Interstitial Ad on Game Restart
-        async function restartGameWithAd() {
-            // Trigger interstitial ad seamlessly before restarting
-            if (Math.random() < 0.6) { // 60% chance to show interstitial between runs
-                await triggerAdSDK();
-            }
-            startGame();
-        }
-
-        // Native Haptic Feedback Wrapper
-        function triggerHaptic(type = 'light') {
-            if (tg?.Haptics) {
-                tg.Haptics.impactOccurred(type);
-            }
-        }
-
-        /* ==========================================================================
-           SYNTH AUDIO SYSTEM (Web Audio API)
-           ========================================================================== */
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        let audioCtx = null;
-
-        function initAudio() {
-            if (!audioCtx) audioCtx = new AudioCtx();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-        }
-
-        function playSound(type) {
-            if (!audioCtx) return;
-            const now = audioCtx.currentTime;
-
-            if (type === 'jump') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(180, now);
-                osc.frequency.exponentialRampToValueAtTime(450, now + 0.15);
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(now);
-                osc.stop(now + 0.15);
-            } else if (type === 'star') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(800, now);
-                osc.frequency.setValueAtTime(1200, now + 0.08);
-                gain.gain.setValueAtTime(0.25, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(now);
-                osc.stop(now + 0.2);
-            } else if (type === 'powerup') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(880, now + 0.3);
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(now);
-                osc.stop(now + 0.3);
-            } else if (type === 'crash') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(120, now);
-                osc.frequency.linearRampToValueAtTime(40, now + 0.3);
-                gain.gain.setValueAtTime(0.4, now);
-                gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(now);
-                osc.stop(now + 0.3);
-            }
-        }
-
-        /* ==========================================================================
-           GAME STATE & ECONOMY DATA
-           ========================================================================== */
-        let state = {
-            stars: parseInt(localStorage.getItem('tg_stars') || '25'),
-            highScore: parseInt(localStorage.getItem('tg_highscore') || '0'),
-            upgrades: JSON.parse(localStorage.getItem('tg_upgrades') || '{"magnet": 1, "shield": 0, "multiplier": 1}'),
-            currentSkin: localStorage.getItem('tg_skin') || 'paper_plane',
-            unlockedSkins: JSON.parse(localStorage.getItem('tg_unlocked_skins') || '["paper_plane"]')
-        };
-
-        function saveState() {
-            localStorage.setItem('tg_stars', state.stars);
-            localStorage.setItem('tg_highscore', state.highScore);
-            localStorage.setItem('tg_upgrades', JSON.stringify(state.upgrades));
-            localStorage.setItem('tg_skin', state.currentSkin);
-            localStorage.setItem('tg_unlocked_skins', JSON.stringify(state.unlockedSkins));
-            updateHUD();
-        }
-
-        function updateHUD() {
-            document.getElementById('stars-balance-text').innerText = state.stars;
-            document.getElementById('start-highscore-text').innerText = `${state.highScore} m`;
-            document.getElementById('multiplier-badge').innerText = `${state.upgrades.multiplier}x MULT`;
-        }
-
-        /* ==========================================================================
-           CANVAS ENGINE & INFINITE RUNNER GAME ENGINE
-           ========================================================================== */
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-
-        // Responsive Resizing
-        let width = 0, height = 0;
-        function resizeCanvas() {
-            width = canvas.parentElement.clientWidth;
-            height = canvas.parentElement.clientHeight;
-            canvas.width = width;
-            canvas.height = height;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        // Game Dynamic Variables
-        let isRunning = false;
-        let isGameOver = false;
-        let distance = 0;
-        let collectedStarsSession = 0;
-        let gameSpeed = 6;
-        let frameCount = 0;
-        let reviveUsed = false;
-
-        // Lane definitions (3 Lanes)
-        const laneCount = 3;
-        let currentLane = 1; // 0: Left, 1: Center, 2: Right
-        let targetX = 0;
-        let playerX = 0;
-        let playerY = 0;
-        let playerYVel = 0;
-        let isJumping = false;
-        let isSliding = false;
-        let slideTimer = 0;
-
-        // Active Powerups Session State
-        let activePowerups = {
-            shield: false,
-            magnetTimer: 0,
-            boostTimer: 0
-        };
-
-        // Entities arrays
-        let obstacles = [];
-        let collectibles = [];
-        let particles = [];
-
-        // Track road parameters
-        function getLaneX(laneIndex) {
-            const roadWidth = Math.min(width * 0.85, 360);
-            const laneWidth = roadWidth / laneCount;
-            const startX = (width - roadWidth) / 2;
-            return startX + laneWidth * laneIndex + laneWidth / 2;
-        }
-
-        /* ==========================================================================
-           GAME LOOP & RENDERING
-           ========================================================================== */
-        function startGame() {
-            initAudio();
-            document.getElementById('start-screen').classList.add('hidden');
-            document.getElementById('gameover-modal').classList.add('hidden');
-
-            // Reset engine variables
-            isRunning = true;
-            isGameOver = false;
-            distance = 0;
-            collectedStarsSession = 0;
-            gameSpeed = 6;
-            frameCount = 0;
-            currentLane = 1;
-            playerYVel = 0;
-            isJumping = false;
-            isSliding = false;
-            reviveUsed = false;
-
-            obstacles = [];
-            collectibles = [];
-            particles = [];
-
-            // Apply starting upgrades
-            activePowerups.shield = state.upgrades.shield > 0;
-            activePowerups.magnetTimer = 0;
-            activePowerups.boostTimer = 0;
-
-            document.getElementById('revive-container').classList.remove('hidden');
-
-            if (tg?.MainButton) {
-                tg.MainButton.hide();
-            }
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        function gameLoop() {
-            if (!isRunning) return;
-
-            update();
-            render();
-
-            frameCount++;
-            requestAnimationFrame(gameLoop);
-        }
-
-        /* ==========================================================================
-           STATE UPDATES & PHYSICS
-           ========================================================================== */
-        function update() {
-            // Distance progression
-            const effectiveSpeed = activePowerups.boostTimer > 0 ? gameSpeed * 1.8 : gameSpeed;
-            distance += Math.round(effectiveSpeed * 0.1);
-            gameSpeed += 0.0015; // Smooth difficulty scaling
-
-            // Update Player Lane position with smooth lerp
-            targetX = getLaneX(currentLane);
-            playerX += (targetX - playerX) * 0.25;
-
-            // Player Jump Physics
-            const groundY = height * 0.78;
-            if (isJumping) {
-                playerY += playerYVel;
-                playerYVel += 1.1; // Gravity
-                if (playerY >= groundY) {
-                    playerY = groundY;
-                    isJumping = false;
-                }
-            } else {
-                playerY = groundY;
-            }
-
-            // Player Slide state
-            if (isSliding) {
-                slideTimer--;
-                if (slideTimer <= 0) {
-                    isSliding = false;
-                }
-            }
-
-            // Update Active Powerups
-            if (activePowerups.magnetTimer > 0) activePowerups.magnetTimer--;
-            if (activePowerups.boostTimer > 0) activePowerups.boostTimer--;
-
-            // Update UI Powerup indicators
-            renderPowerupIndicators();
-
-            // Spawn Obstacles & Collectibles
-            spawnEntities();
-
-            // Update Particles
-            particles.forEach((p, index) => {
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= 0.02;
-                if (p.alpha <= 0) particles.splice(index, 1);
-            });
-
-            // Update Obstacles
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                let obs = obstacles[i];
-                obs.y += effectiveSpeed;
-
-                // Collision Detection
-                if (Math.abs(obs.y - playerY) < 35 && obs.lane === currentLane) {
-                    // Check slide ducking for high barriers
-                    if (obs.type === 'high_laser' && isSliding) {
-                        // Dodged successfully under laser!
-                    } else if (isJumping && obs.type === 'low_barrier') {
-                        // Jumped successfully over barrier!
-                    } else {
-                        // Crash Event
-                        if (activePowerups.boostTimer > 0) {
-                            // Invincible Boost destroys obstacle
-                            spawnSparks(obs.x, obs.y, '#38BDF8');
-                            obstacles.splice(i, 1);
-                        } else if (activePowerups.shield) {
-                            // Shield absorbs impact
-                            activePowerups.shield = false;
-                            triggerHaptic('medium');
-                            playSound('crash');
-                            spawnSparks(obs.x, obs.y, '#10B981');
-                            obstacles.splice(i, 1);
-                        } else {
-                            // Game Over
-                            triggerHaptic('heavy');
-                            playSound('crash');
-                            handleGameOver();
-                            return;
-                        }
-                    }
-                }
-
-                if (obs.y > height + 50) obstacles.splice(i, 1);
-            }
-
-            // Update Collectibles (Stars & Powerups)
-            for (let i = collectibles.length - 1; i >= 0; i--) {
-                let col = collectibles[i];
-                col.y += effectiveSpeed;
-
-                // Magnet Attraction Logic
-                if (activePowerups.magnetTimer > 0 && col.type === 'star') {
-                    const dx = playerX - col.x;
-                    const dy = playerY - col.y;
-                    col.x += dx * 0.15;
-                    col.y += dy * 0.15;
-                }
-
-                // Pickup Detection
-                const dist = Math.hypot(col.x - playerX, col.y - playerY);
-                if (dist < 40) {
-                    if (col.type === 'star') {
-                        collectedStarsSession += state.upgrades.multiplier;
-                        triggerHaptic('light');
-                        playSound('star');
-                        spawnSparks(col.x, col.y, '#F59E0B');
-                    } else if (col.type === 'magnet') {
-                        activePowerups.magnetTimer = 300 * state.upgrades.magnet;
-                        playSound('powerup');
-                    } else if (col.type === 'boost') {
-                        activePowerups.boostTimer = 200;
-                        playSound('powerup');
-                    } else if (col.type === 'shield') {
-                        activePowerups.shield = true;
-                        playSound('powerup');
-                    }
-                    collectibles.splice(i, 1);
-                } else if (col.y > height + 50) {
-                    collectibles.splice(i, 1);
-                }
-            }
-
-            // HUD Score update
-            document.getElementById('score-text').innerText = `${distance}m`;
-        }
-
-        /* ==========================================================================
-           ENTITIES SPAWNING & PARTICLES
-           ========================================================================== */
-        function spawnEntities() {
-            if (frameCount % Math.max(25, Math.floor(600 / gameSpeed)) === 0) {
-                const lane = Math.floor(Math.random() * laneCount);
-                const types = ['code_block', 'low_barrier', 'high_laser'];
-                const type = types[Math.floor(Math.random() * types.length)];
-                obstacles.push({ lane, x: getLaneX(lane), y: -50, type });
-            }
-
-            // Spawn Stars & Powerups
-            if (frameCount % 20 === 0) {
-                const lane = Math.floor(Math.random() * laneCount);
-                const rand = Math.random();
-                if (rand < 0.7) {
-                    collectibles.push({ lane, x: getLaneX(lane), y: -30, type: 'star' });
-                } else if (rand > 0.95) {
-                    const pTypes = ['magnet', 'boost', 'shield'];
-                    const pType = pTypes[Math.floor(Math.random() * pTypes.length)];
-                    collectibles.push({ lane, x: getLaneX(lane), y: -30, type: pType });
-                }
-            }
-        }
-
-        function spawnSparks(x, y, color) {
-            for (let i = 0; i < 12; i++) {
-                particles.push({
-                    x, y,
-                    vx: (Math.random() - 0.5) * 8,
-                    vy: (Math.random() - 0.5) * 8,
-                    color,
-                    alpha: 1
-                });
-            }
-        }
-
-        /* ==========================================================================
-           CANVAS DRAWING RENDERING
-           ========================================================================== */
-        function render() {
-            ctx.clearRect(0, 0, width, height);
-
-            // Draw Cyber Perspective Grid
-            drawRoadGrid();
-
-            // Draw Obstacles
-            obstacles.forEach(obs => {
-                ctx.save();
-                if (obs.type === 'code_block') {
-                    ctx.fillStyle = '#EF4444';
-                    ctx.shadowColor = '#EF4444';
-                    ctx.shadowBlur = 12;
-                    ctx.fillRect(obs.x - 22, obs.y - 22, 44, 44);
-                    ctx.fillStyle = '#FFF';
-                    ctx.font = 'bold 12px monospace';
-                    ctx.fillText('404', obs.x - 11, obs.y + 4);
-                } else if (obs.type === 'low_barrier') {
-                    ctx.fillStyle = '#F97316';
-                    ctx.fillRect(obs.x - 28, obs.y - 12, 56, 24);
-                } else if (obs.type === 'high_laser') {
-                    ctx.strokeStyle = '#F43F5E';
-                    ctx.lineWidth = 6;
-                    ctx.shadowColor = '#F43F5E';
-                    ctx.shadowBlur = 15;
-                    ctx.beginPath();
-                    ctx.moveTo(obs.x - 32, obs.y);
-                    ctx.lineTo(obs.x + 32, obs.y);
-                    ctx.stroke();
-                }
-                ctx.restore();
-            });
-
-            // Draw Collectibles
-            collectibles.forEach(col => {
-                ctx.save();
-                if (col.type === 'star') {
-                    ctx.fillStyle = '#F59E0B';
-                    ctx.shadowColor = '#F59E0B';
-                    ctx.shadowBlur = 10;
-                    ctx.font = '22px sans-serif';
-                    ctx.fillText('⭐', col.x - 11, col.y + 8);
-                } else {
-                    ctx.fillStyle = col.type === 'magnet' ? '#3B82F6' : col.type === 'boost' ? '#06B6D4' : '#10B981';
-                    ctx.beginPath();
-                    ctx.arc(col.x, col.y, 14, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = '#FFF';
-                    ctx.font = 'bold 10px sans-serif';
-                    ctx.fillText(col.type.substring(0, 3).toUpperCase(), col.x - 10, col.y + 3);
-                }
-                ctx.restore();
-            });
-
-            // Draw Particles
-            particles.forEach(p => {
-                ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
-                ctx.fillRect(p.x, p.y, 4, 4);
-                ctx.restore();
-            });
-
-            // Draw Runner Character
-            drawCharacter();
-        }
-
-        function drawRoadGrid() {
-            const roadWidth = Math.min(width * 0.85, 360);
-            const startX = (width - roadWidth) / 2;
-
-            // Track background
-            ctx.fillStyle = '#090D16';
-            ctx.fillRect(startX, 0, roadWidth, height);
-
-            // Draw Lane Dividers
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
-            ctx.lineWidth = 2;
-            const laneW = roadWidth / laneCount;
-            for (let i = 1; i < laneCount; i++) {
-                ctx.beginPath();
-                ctx.setLineDash([15, 15]);
-                ctx.moveTo(startX + laneW * i, 0);
-                ctx.lineTo(startX + laneW * i, height);
-                ctx.stroke();
-            }
-            ctx.setLineDash([]);
-        }
-
-        function drawCharacter() {
-            ctx.save();
-            ctx.translate(playerX, playerY);
-
-            // Active Shield Visual Aura
-            if (activePowerups.shield) {
-                ctx.strokeStyle = '#10B981';
-                ctx.lineWidth = 3;
-                ctx.shadowColor = '#10B981';
-                ctx.shadowBlur = 15;
-                ctx.beginPath();
-                ctx.arc(0, -10, 30, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-
-            // Slide Scale Effect
-            if (isSliding) {
-                ctx.scale(1.2, 0.5);
-            }
-
-            // Render Skins (Telegram Paper Plane or Cyber Sphere)
-            if (state.currentSkin === 'paper_plane') {
-                ctx.fillStyle = '#24A1DE';
-                ctx.shadowColor = '#38BDF8';
-                ctx.shadowBlur = 12;
-                ctx.beginPath();
-                ctx.moveTo(0, -25);
-                ctx.lineTo(20, 15);
-                ctx.lineTo(0, 5);
-                ctx.lineTo(-20, 15);
-                ctx.closePath();
-                ctx.fill();
-            } else if (state.currentSkin === 'gold_plane') {
-                ctx.fillStyle = '#F59E0B';
-                ctx.shadowColor = '#FBBF24';
-                ctx.shadowBlur = 15;
-                ctx.beginPath();
-                ctx.moveTo(0, -25);
-                ctx.lineTo(20, 15);
-                ctx.lineTo(0, 5);
-                ctx.lineTo(-20, 15);
-                ctx.closePath();
-                ctx.fill();
-            } else {
-                ctx.fillStyle = '#A855F7';
-                ctx.beginPath();
-                ctx.arc(0, -10, 18, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            ctx.restore();
-        }
-
-        function renderPowerupIndicators() {
-            const container = document.getElementById('powerup-bar-container');
-            container.innerHTML = '';
-
-            if (activePowerups.magnetTimer > 0) {
-                container.innerHTML += `
-                    <div class="bg-blue-600/80 text-white text-[10px] font-bold px-2 py-1 rounded-md flex justify-between items-center border border-blue-400">
-                        <span>🧲 MAGNET</span> <span>${Math.ceil(activePowerups.magnetTimer / 60)}s</span>
-                    </div>`;
-            }
-            if (activePowerups.boostTimer > 0) {
-                container.innerHTML += `
-                    <div class="bg-cyan-600/80 text-white text-[10px] font-bold px-2 py-1 rounded-md flex justify-between items-center border border-cyan-400">
-                        <span>⚡ SPEED BOOST</span> <span>${Math.ceil(activePowerups.boostTimer / 60)}s</span>
-                    </div>`;
-            }
-        }
-
-        /* ==========================================================================
-           CONTROLS & INPUT HANDLING
-           ========================================================================== */
-        function moveLeft() { if (currentLane > 0) currentLane--; }
-        function moveRight() { if (currentLane < laneCount - 1) currentLane++; }
-        function jump() {
-            if (!isJumping) {
-                isJumping = true;
-                playerYVel = -15;
-                playSound('jump');
-            }
-        }
-        function slide() {
-            if (!isSliding) {
-                isSliding = true;
-                slideTimer = 35;
-            }
-        }
-
-        // Keyboard Controls
-        window.addEventListener('keydown', (e) => {
-            if (!isRunning) return;
-            if (e.key === 'ArrowLeft' || e.key === 'a') moveLeft();
-            if (e.key === 'ArrowRight' || e.key === 'd') moveRight();
-            if (e.key === 'ArrowUp' || e.key === 'w') jump();
-            if (e.key === 'ArrowDown' || e.key === 's') slide();
+  </div>
+
+  <!-- Pantalla del Juego -->
+  <div class="relative w-full h-screen flex items-center justify-center pt-14 pb-16">
+    <canvas id="gameCanvas" class="w-full h-full max-w-md bg-slate-900 border border-slate-800 rounded-lg shadow-2xl"></canvas>
+  </div>
+
+  <!-- Botón de Inicio / Reinicio -->
+  <div id="ui-overlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 z-20">
+    <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500 mb-2">CYBER RUNNER</h1>
+    <p class="text-slate-400 text-sm mb-6 text-center">Toca la pantalla o usa las flechas para moverte y esquivar obstáculos</p>
+    
+    <button id="start-btn" onclick="startGame()" class="w-full max-w-xs py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/30 transform active:scale-95 transition-all mb-3">
+      ▶ ¡JUGAR AHORA!
+    </button>
+
+    <button onclick="showAdForBonus()" class="w-full max-w-xs py-3 bg-slate-800 border border-amber-500/50 text-amber-400 font-semibold rounded-xl hover:bg-slate-700 flex items-center justify-center gap-2">
+      <span>📺 Ver Anuncio (+25 ⭐)</span>
+    </button>
+  </div>
+
+  <script>
+    // Inicializar Telegram WebApp
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Ajustar resolución del canvas
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth || 360;
+      canvas.height = canvas.parentElement.clientHeight || 600;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let isRunning = false;
+    let score = 0;
+    let stars = 0;
+    let player = { x: canvas.width / 2, y: canvas.height - 80, size: 25, lane: 1 };
+    let obstacles = [];
+
+    // Función segura para anuncios
+    function showAdForBonus() {
+      if (typeof show_11937368 === 'function' && !window.adSdkFailed) {
+        show_11937368().then(() => {
+          stars += 25;
+          document.getElementById('stars-count').innerText = stars;
+          alert('¡Ganaste +25 Estrellas!');
+        }).catch(() => {
+          alert('No se pudo cargar el anuncio en este momento.');
         });
+      } else {
+        // Fallback si hay AdBlock
+        stars += 10;
+        document.getElementById('stars-count').innerText = stars;
+        alert('Anuncios bloqueados o no disponibles. Te regalamos +10 Estrellas.');
+      }
+    }
 
-        // Touch Swipe Gesture Detection
-        let touchStartX = 0, touchStartY = 0;
-        window.addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-        });
+    function startGame() {
+      document.getElementById('ui-overlay').classList.add('hidden');
+      isRunning = true;
+      score = 0;
+      obstacles = [];
+      player.lane = 1;
+      gameLoop();
+    }
 
-        window.addEventListener('touchend', (e) => {
-            if (!isRunning) return;
-            const diffX = e.changedTouches[0].clientX - touchStartX;
-            const diffY = e.changedTouches[0].clientY - touchStartY;
+    function gameOver() {
+      isRunning = false;
+      document.getElementById('start-btn').innerText = '🔄 VOLVER A JUGAR';
+      document.getElementById('ui-overlay').classList.remove('hidden');
+      if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+    }
 
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                if (diffX > 30) moveRight();
-                else if (diffX < -30) moveLeft();
-            } else {
-                if (diffY < -30) jump();
-                else if (diffY > 30) slide();
-            }
-        });
+    // Controles táctiles/click (cambiar de carril)
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!isRunning) return;
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      if (clickX < canvas.width / 2) {
+        if (player.lane > 0) player.lane--;
+      } else {
+        if (player.lane < 2) player.lane++;
+      }
+      if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    });
 
-        /* ==========================================================================
-           GAME OVER & REWARDED ADS SIMULATION
-           ========================================================================== */
-        function handleGameOver() {
-            isRunning = false;
-            isGameOver = true;
+    // Bucle principal de juego
+    function gameLoop() {
+      if (!isRunning) return;
 
-            // Update Total Stars
-            state.stars += collectedStarsSession;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Update High Score
-            const totalScore = distance + (collectedStarsSession * 10);
-            if (totalScore > state.highScore) {
-                state.highScore = totalScore;
-            }
-            saveState();
+      // Dibujar Carriles
+      const laneWidth = canvas.width / 3;
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2;
+      for (let i = 1; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * laneWidth, 0);
+        ctx.lineTo(i * laneWidth, canvas.height);
+        ctx.stroke();
+      }
 
-            // Populate Modal UI
-            document.getElementById('go-distance').innerText = `${distance} m`;
-            document.getElementById('go-stars').innerText = `⭐ ${collectedStarsSession}`;
-            document.getElementById('go-total-score').innerText = `${totalScore} pts`;
+      // Posicionar Jugador suavemente
+      const targetX = (player.lane + 0.5) * laneWidth;
+      player.x += (targetX - player.x) * 0.2;
 
-            document.getElementById('gameover-modal').classList.remove('hidden');
+      // Dibujar Jugador
+      ctx.fillStyle = '#06b6d4';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+      ctx.fill();
 
-            // Show Telegram Native MainButton option
-            if (tg?.MainButton) {
-                tg.MainButton.setText("PLAY AGAIN");
-                tg.MainButton.onClick(startGame);
-                tg.MainButton.show();
-            }
+      // Generar Obstáculos
+      if (Math.random() < 0.03) {
+        const lane = Math.floor(Math.random() * 3);
+        obstacles.push({ x: (lane + 0.5) * laneWidth, y: -30, speed: 4 + score * 0.005 });
+      }
+
+      // Actualizar Obstáculos
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        let obs = obstacles[i];
+        obs.y += obs.speed;
+
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(obs.x - 18, obs.y - 18, 36, 36);
+
+        // Colisión
+        const dist = Math.hypot(player.x - obs.x, player.y - obs.y);
+        if (dist < player.size + 18) {
+          gameOver();
+          return;
         }
 
-        function watchAdToRevive() {
-            if (reviveUsed) return;
-            document.getElementById('ad-modal').classList.remove('hidden');
-
-            let count = 5;
-            const timerElem = document.getElementById('ad-timer');
-            timerElem.innerText = count;
-
-            const interval = setInterval(() => {
-                count--;
-                timerElem.innerText = count;
-                if (count <= 0) {
-                    clearInterval(interval);
-                    document.getElementById('ad-modal').classList.add('hidden');
-                    reviveUsed = true;
-                    document.getElementById('revive-container').classList.add('hidden');
-                    document.getElementById('gameover-modal').classList.add('hidden');
-
-                    // Revive player
-                    isRunning = true;
-                    activePowerups.shield = true;
-                    requestAnimationFrame(gameLoop);
-                }
-            }, 1000);
+        if (obs.y > canvas.height + 40) {
+          obstacles.splice(i, 1);
+          score += 10;
+          document.getElementById('score-count').innerText = score;
         }
+      }
 
-        function showStartScreen() {
-            document.getElementById('gameover-modal').classList.add('hidden');
-            document.getElementById('start-screen').classList.remove('hidden');
-            if (tg?.MainButton) tg.MainButton.hide();
-            updateHUD();
-        }
-
-        /* ==========================================================================
-           SHOP & MONETIZATION SYSTEM
-           ========================================================================== */
-        function openShopModal() {
-            renderShopItems();
-            document.getElementById('shop-modal').classList.remove('hidden');
-        }
-
-        function closeShopModal() {
-            document.getElementById('shop-modal').classList.add('hidden');
-        }
-
-        function renderShopItems() {
-            const list = document.getElementById('upgrades-list');
-            list.innerHTML = `
-                <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
-                    <div>
-                        <div class="font-bold text-sm text-white">Magnet Duration (Lvl ${state.upgrades.magnet})</div>
-                        <div class="text-xs text-slate-400">Attracts nearby stars</div>
-                    </div>
-                    <button onclick="buyUpgrade('magnet', ${state.upgrades.magnet * 30})" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1">
-                        ⭐ ${state.upgrades.magnet * 30}
-                    </button>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
-                    <div>
-                        <div class="font-bold text-sm text-white">Shield Start (Lvl ${state.upgrades.shield})</div>
-                        <div class="text-xs text-slate-400">Start runs with shield</div>
-                    </div>
-                    <button onclick="buyUpgrade('shield', 50)" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1" ${state.upgrades.shield > 0 ? 'disabled class="opacity-50"' : ''}>
-                        ${state.upgrades.shield > 0 ? 'MAXED' : '⭐ 50'}
-                    </button>
-                </div>
-            `;
-
-            const skinsList = document.getElementById('skins-list');
-            const skins = [
-                { id: 'paper_plane', name: 'Classic Blue', cost: 0 },
-                { id: 'gold_plane', name: 'Gold Jet', cost: 100 },
-                { id: 'cyber_orb', name: 'Cyber Orb', cost: 200 }
-            ];
-
-            skinsList.innerHTML = skins.map(s => {
-                const isUnlocked = state.unlockedSkins.includes(s.id);
-                const isSelected = state.currentSkin === s.id;
-                return `
-                    <div onclick="selectSkin('${s.id}', ${s.cost})" class="bg-slate-900 border ${isSelected ? 'border-cyan-400' : 'border-slate-800'} p-2 rounded-xl text-center cursor-pointer">
-                        <div class="text-xs font-bold text-white mb-1">${s.name}</div>
-                        ${isUnlocked ?
-                            `<span class="text-[10px] ${isSelected ? 'text-cyan-400 font-black' : 'text-slate-400'}">${isSelected ? 'EQUIPPED' : 'SELECT'}</span>` :
-                            `<button class="px-2 py-1 bg-amber-500 text-slate-950 font-bold text-[10px] rounded-lg">⭐ ${s.cost}</button>`
-                        }
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function buyUpgrade(type, cost) {
-            if (state.stars >= cost) {
-                state.stars -= cost;
-                state.upgrades[type]++;
-                saveState();
-                renderShopItems();
-            } else {
-                tg?.showAlert?.("Not enough Telegram Stars!");
-            }
-        }
-
-        function selectSkin(skinId, cost) {
-            if (state.unlockedSkins.includes(skinId)) {
-                state.currentSkin = skinId;
-                saveState();
-                renderShopItems();
-            } else if (state.stars >= cost) {
-                state.stars -= cost;
-                state.unlockedSkins.push(skinId);
-                state.currentSkin = skinId;
-                saveState();
-                renderShopItems();
-            }
-        }
-
-        function simulateStarPurchase(amount) {
-            if (tg?.openInvoice) {
-                // Production Telegram Stars Invoice SDK Flow template
-                // tg.openInvoice(invoiceUrl, (status) => { ... });
-            }
-            // Simulated local credit
-            state.stars += amount;
-            saveState();
-            tg?.showAlert?.(`Successfully credited ${amount} Telegram Stars!`);
-            renderShopItems();
-        }
-
-        /* ==========================================================================
-           LEADERBOARD & QUESTS
-           ========================================================================== */
-        function openLeaderboardModal() {
-            document.getElementById('player-lb-score').innerText = `${state.highScore} m`;
-            if (tg?.initDataUnsafe?.user) {
-                document.getElementById('player-name').innerText = tg.initDataUnsafe.user.first_name || 'Telegram User';
-            }
-            document.getElementById('leaderboard-modal').classList.remove('hidden');
-        }
-
-        function closeLeaderboardModal() {
-            document.getElementById('leaderboard-modal').classList.add('hidden');
-        }
-
-        function switchTab(tab) {
-            if (tab === 'lb') {
-                document.getElementById('tab-lb-content').classList.remove('hidden');
-                document.getElementById('tab-quests-content').classList.add('hidden');
-                document.getElementById('tab-lb-btn').className = 'text-lg font-black text-cyan-400 border-b-2 border-cyan-400 pb-1';
-                document.getElementById('tab-quests-btn').className = 'text-lg font-black text-slate-500 pb-1';
-            } else {
-                document.getElementById('tab-lb-content').classList.add('hidden');
-                document.getElementById('tab-quests-content').classList.remove('hidden');
-                document.getElementById('tab-quests-btn').className = 'text-lg font-black text-cyan-400 border-b-2 border-cyan-400 pb-1';
-                document.getElementById('tab-lb-btn').className = 'text-lg font-black text-slate-500 pb-1';
-            }
-        }
-
-        function claimQuest(id) {
-            if (id === 1) state.stars += 20;
-            if (id === 2) state.stars += 30;
-            saveState();
-            tg?.showAlert?.("Quest reward claimed!");
-        }
-
-        // Initialize HUD state on load
-        updateHUD();
-    </script>
+      requestAnimationFrame(gameLoop);
+    }
+  </script>
 </body>
 </html>
